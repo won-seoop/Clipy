@@ -43,7 +43,7 @@ final class HotKeyService: NSObject {
 // MARK: - Actions
 extension HotKeyService {
     @objc func popupMainMenu() {
-        AppEnvironment.current.menuManager.popUpMenu(.main)
+        HistorySearchWindowController.shared.showSearchWindow()
         firebase.logEvent(event: .popUpMenu(.main))
     }
 

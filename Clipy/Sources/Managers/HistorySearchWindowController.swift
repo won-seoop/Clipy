@@ -116,7 +116,6 @@ private final class HistorySearchViewModel: ObservableObject {
         pasteboardHistoryRepository.observeHistories()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard self?.query.isEmpty == false else { return }
                 self?.search()
             }
             .store(in: &cancellables)
@@ -124,8 +123,7 @@ private final class HistorySearchViewModel: ObservableObject {
 
     func reset() {
         query = ""
-        results = []
-        selectedHistoryID = nil
+        search()
         focusRequest = UUID()
     }
 
@@ -140,17 +138,22 @@ private final class HistorySearchViewModel: ObservableObject {
 
     private func search() {
         let fragment = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !fragment.isEmpty else {
-            results = []
-            selectedHistoryID = nil
-            return
+        let results: [PasteboardHistoryDetail]
+        if fragment.isEmpty {
+            let defaults = AppEnvironment.current.defaults
+            let resultLimit = min(defaults.integer(forKey: Constants.UserDefaults.maxHistorySize), 100)
+            results = pasteboardHistoryRepository.fetchHistoryDetails(
+                sortsByCreatedAt: !defaults.bool(forKey: Constants.UserDefaults.reorderClipsAfterPasting),
+                includesThumbnailAsset: true,
+                limit: resultLimit
+            )
+        } else {
+            results = pasteboardHistoryRepository.searchHistoryDetails(
+                containing: fragment,
+                includesThumbnailAsset: true,
+                limit: 100
+            )
         }
-
-        let results = pasteboardHistoryRepository.searchHistoryDetails(
-            containing: fragment,
-            includesThumbnailAsset: true,
-            limit: 100
-        )
         self.results = results
         if !results.contains(where: { $0.history.id == selectedHistoryID }) {
             selectedHistoryID = results.first?.history.id
@@ -194,10 +197,10 @@ private struct HistorySearchView: View {
 
     @ViewBuilder
     private var searchContent: some View {
-        if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.results.isEmpty && viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             emptyState(
                 systemImage: "text.magnifyingglass",
-                message: String(localized: "Enter a continuous text fragment to search your clipboard history")
+                message: String(localized: "No clipboard history")
             )
         } else if viewModel.results.isEmpty {
             emptyState(
